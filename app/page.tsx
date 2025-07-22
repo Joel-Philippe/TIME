@@ -6,7 +6,6 @@ import { faUser, faCamera, faClipboardList, faShoppingCart, faEnvelope, faKey } 
 import styles from './Home.module.css';
 import DisplayNameForm from '@/components/DisplayNameForm';
 import ProfilePhotoForm from '@/components/ProfilePhotoForm';
-import SpecialRequests from '@/components/SpecialRequests';
 import Purchases from '@/components/Purchases';
 import Messages from '@/components/Messages';
 import ChangePasswordForm from '@/components/ChangePasswordForm';
@@ -50,7 +49,6 @@ function InnerHome({ user }) {
       case 'profilePhoto':
         return <ProfilePhotoForm />;
       case 'specialRequests':
-        return <SpecialRequests />;
       case 'purchases':
         return <Purchases />;
       case 'messages':
