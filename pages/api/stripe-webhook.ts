@@ -1,4 +1,3 @@
-import { buffer } from "micro";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { stripe } from "../../utils/stripe";
 import { db } from "@/components/firebaseConfig";

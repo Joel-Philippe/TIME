@@ -1,25 +1,78 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { deleteUser, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
+import {
+  deleteUser,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  User,
+} from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { auth, storage, db } from '../components/firebaseConfig';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from 'firebase/storage';
+import {
+  doc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from 'firebase/firestore';
 
-const AuthContext = createContext(null);
+// 🔸 Interface du contexte
+interface AuthContextType {
+  user: User | null;
+  signup: (
+    email: string,
+    password: string,
+    displayName: string,
+    photoFile?: File
+  ) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updateDisplayName: (displayName: string) => Promise<void>;
+  updateProfilePhoto: (photoFile: File) => Promise<void>;
+  reauthenticateUser: (password: string) => Promise<void>;
+  acceptRequest: (request: { id: string }) => Promise<void>;
+  deleteUserAccount: () => Promise<void>;
+}
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user ? user : null);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser ?? null);
     });
     return () => unsubscribe();
   }, []);
 
-  const signup = async (email, password, displayName, photoFile) => {
+  const signup = async (
+    email: string,
+    password: string,
+    displayName: string,
+    photoFile?: File
+  ) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       let photoURL = '';
@@ -35,37 +88,39 @@ export const AuthProvider = ({ children }) => {
         photoURL,
       });
 
-      await auth.currentUser.reload();
+      await auth.currentUser?.reload();
       const updatedUser = auth.currentUser;
 
-      setUser({
-        ...updatedUser,
-        displayName: updatedUser.displayName,
-        photoURL: updatedUser.photoURL,
-      });
+      if (updatedUser) {
+        setUser({
+          ...updatedUser,
+          displayName: updatedUser.displayName,
+          photoURL: updatedUser.photoURL,
+        });
+      }
     } catch (error) {
       console.error('Error signing up:', error);
       throw new Error('Erreur lors de la création du compte.');
     }
   };
 
-  const login = (email, password) => {
-    return signInWithEmailAndPassword(auth, email, password);
+  const login = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const logout = () => {
-    return signOut(auth).then(() => {
-      setUser(null);
-      router.push('/login');
-    });
+  const logout = async () => {
+    await signOut(auth);
+    setUser(null);
+    router.push('/login');
   };
 
-  const resetPassword = (email) => {
-    return sendPasswordResetEmail(auth, email);
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
   };
 
-  const updateDisplayName = async (displayName) => {
+  const updateDisplayName = async (displayName: string) => {
     try {
+      if (!auth.currentUser) throw new Error('Utilisateur non connecté.');
       await updateProfile(auth.currentUser, { displayName });
       await auth.currentUser.reload();
       setUser({ ...auth.currentUser });
@@ -75,8 +130,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateProfilePhoto = async (photoFile) => {
+  const updateProfilePhoto = async (photoFile: File) => {
     try {
+      if (!auth.currentUser) throw new Error('Utilisateur non connecté.');
       const storageRef = ref(storage, `profileImages/${auth.currentUser.uid}`);
       await uploadBytes(storageRef, photoFile);
       const photoURL = await getDownloadURL(storageRef);
@@ -89,79 +145,71 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const reauthenticateUser = async (password) => {
-    if (!auth.currentUser || !auth.currentUser.email) throw new Error("Utilisateur non connecté");
+  const reauthenticateUser = async (password: string) => {
+    if (!auth.currentUser || !auth.currentUser.email) {
+      throw new Error('Utilisateur non connecté.');
+    }
     const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
     await reauthenticateWithCredential(auth.currentUser, credential);
   };
 
-  const acceptRequest = async (request) => {
+  const acceptRequest = async (request: { id: string }) => {
     try {
       const requestRef = doc(db, 'requests', request.id);
       await updateDoc(requestRef, { status: 'accepted' });
     } catch (error) {
       console.error('Error accepting request:', error);
-      throw new Error('Erreur lors de l\'acceptation de la demande.');
+      throw new Error("Erreur lors de l'acceptation de la demande.");
     }
   };
 
   const deleteUserAccount = async () => {
-    if (!auth.currentUser) throw new Error("Aucun utilisateur connecté");
+    if (!auth.currentUser) throw new Error('Aucun utilisateur connecté.');
 
     const uid = auth.currentUser.uid;
 
     try {
-      // 🔸 Supprimer le document utilisateur
       await deleteDoc(doc(db, 'users', uid));
 
-      // 🔸 Supprimer les commandes liées
-      const ordersSnapshot = await getDocs(query(collection(db, 'orders'), where('userId', '==', uid)));
-      for (const docSnap of ordersSnapshot.docs) {
-        await deleteDoc(doc(db, 'orders', docSnap.id));
+      const collections = ['orders', 'messages', 'comments', 'ratings'];
+      for (const col of collections) {
+        const snapshot = await getDocs(query(collection(db, col), where('userId', '==', uid)));
+        for (const docSnap of snapshot.docs) {
+          await deleteDoc(doc(db, col, docSnap.id));
+        }
       }
 
-      // 🔸 Supprimer les messages liés
-      const messagesSnapshot = await getDocs(query(collection(db, 'messages'), where('userId', '==', uid)));
-      for (const docSnap of messagesSnapshot.docs) {
-        await deleteDoc(doc(db, 'messages', docSnap.id));
-      }
-
-      // 🔸 Supprimer les commentaires liés
-      const commentsSnapshot = await getDocs(query(collection(db, 'comments'), where('userId', '==', uid)));
-      for (const docSnap of commentsSnapshot.docs) {
-        await deleteDoc(doc(db, 'comments', docSnap.id));
-      }
-
-      // 🔸 Supprimer les évaluations liées
-      const ratingsSnapshot = await getDocs(query(collection(db, 'ratings'), where('userId', '==', uid)));
-      for (const docSnap of ratingsSnapshot.docs) {
-        await deleteDoc(doc(db, 'ratings', docSnap.id));
-      }
-
-      // ✅ Supprimer le compte utilisateur Firebase
       await deleteUser(auth.currentUser);
     } catch (error) {
-      console.error("Erreur lors de la suppression du compte : ", error);
+      console.error('Erreur lors de la suppression du compte : ', error);
       throw error;
     }
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      signup,
-      login,
-      logout,
-      resetPassword,
-      updateDisplayName,
-      updateProfilePhoto,
-      reauthenticateUser,
-      acceptRequest,
-      deleteUserAccount
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        signup,
+        login,
+        logout,
+        resetPassword,
+        updateDisplayName,
+        updateProfilePhoto,
+        reauthenticateUser,
+        acceptRequest,
+        deleteUserAccount,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

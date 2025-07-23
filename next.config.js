@@ -1,17 +1,19 @@
 // next.config.js
+require('dotenv').config();
+
+/** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint : {
+  reactStrictMode: true,
+    eslint : {
     ignoreDuringBuilds : false,
   },
-}
-require('dotenv').config();
 
-module.exports = {
-  reactStrictMode: true,
-};
-// next.config.js
-require('dotenv').config();
 
-module.exports = {
-  reactStrictMode: true,
+  // Désactive l'optimisation automatique des images (nécessaire pour export statique)
+  images: {
+    unoptimized: true,
+  },
 };
+
+
+module.exports = nextConfig;

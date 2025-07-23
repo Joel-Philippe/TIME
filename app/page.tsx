@@ -20,7 +20,8 @@ import GlobalPrice from '@/components/globalprice'; // ✅ Ajout du panier globa
 import './Cards.css';
 
 export default function Home() {
-  const { user } = useAuth();
+  const auth = useAuth();         // ✅ récupère l'objet auth
+  const user = auth?.user;        // ✅ accède à `user` de manière sécurisée
 
   return (
     <CheckboxProvider>
@@ -31,36 +32,14 @@ export default function Home() {
   );
 }
 
-// ✅ Déplace `useGlobalCart()` ici pour éviter l'erreur
-function InnerHome({ user }) {
+function InnerHome({ user }: { user: any }) {
   const { globalCart } = useGlobalCart();
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [isCartOpen, setIsCartOpen] = useState(false); // ✅ État pour afficher la modale du panier
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   const openModal = (modalType: string) => setActiveModal(modalType);
   const closeModal = () => setActiveModal(null);
-  const openCart = () => setIsCartOpen(true);
-  const closeCart = () => setIsCartOpen(false);
 
-  const renderModalContent = () => {
-    switch (activeModal) {
-      case 'displayName':
-        return <DisplayNameForm />;
-      case 'profilePhoto':
-        return <ProfilePhotoForm />;
-      case 'specialRequests':
-      case 'purchases':
-        return <Purchases />;
-      case 'messages':
-        return <Messages />;
-      case 'changePassword':
-        return <ChangePasswordForm />;
-      default:
-        return null;
-    }
-  };
-
-  // ✅ Calcule le nombre d'articles dans le panier
   const cartCount = Object.values(globalCart).reduce((sum, item) => sum + item.count, 0);
 
   return (
@@ -70,10 +49,9 @@ function InnerHome({ user }) {
       {user && (
         <div className={styles.footerContainer}>
           <div className={styles.menuButtons}>
-            {/* ✅ Ajout du bouton Panier Global */}
-            <button 
-              onClick={() => setIsCartOpen(true)} 
-              className={`${styles.cartButton} ${cartCount > 0 ? styles.activeCart : ''}`} // ✅ Ajout d'une classe dynamique
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className={`${styles.cartButton} ${cartCount > 0 ? styles.activeCart : ''}`}
             >
               <FontAwesomeIcon icon={faShoppingCart} className={styles.icon} /> Panier
               {cartCount > 0 && <span className={styles.cartCount}>{cartCount}</span>}
@@ -82,10 +60,8 @@ function InnerHome({ user }) {
         </div>
       )}
 
-      {/* ✅ Affichage du panier global sous forme de modale */}
       <GlobalPrice isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
 
-      {/* ✅ Affichage des autres modales si une est active */}
       {activeModal && (
         <div className={styles.modalOverlay} onClick={closeModal}>
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -107,10 +83,30 @@ function InnerHome({ user }) {
                 &times;
               </button>
             </div>
-            <div className={styles.modalBody}>{renderModalContent()}</div>
+            <div className={styles.modalBody}>
+              {renderModalContent(activeModal)}
+            </div>
           </div>
         </div>
       )}
     </>
   );
+}
+
+function renderModalContent(modalType: string | null) {
+  switch (modalType) {
+    case 'displayName':
+      return <DisplayNameForm />;
+    case 'profilePhoto':
+      return <ProfilePhotoForm />;
+    case 'specialRequests':
+    case 'purchases':
+      return <Purchases />;
+    case 'messages':
+      return <Messages />;
+    case 'changePassword':
+      return <ChangePasswordForm />;
+    default:
+      return null;
+  }
 }
